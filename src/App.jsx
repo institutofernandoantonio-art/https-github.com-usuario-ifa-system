@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { 
   User, LogOut, Home as HomeIcon, MessageSquare, 
-  Megaphone, BarChart2, Camera, Settings, ArrowLeft
+  Megaphone, BarChart2, Camera, Settings, ArrowLeft, DollarSign
 } from 'lucide-react';
 import MarketingModule from './modules/MarketingModule';
 import PesquisasModule from './modules/PesquisasModule';
+import FinanceiroModule from './modules/FinanceiroModule';
+import IndicadoresModule from './modules/IndicadoresModule';
+import ConfigModule from './modules/ConfigModule';
 
 const styles = {
   // Layout Base
@@ -206,10 +209,10 @@ export default function App() {
   const [activeModule, setActiveModule] = useState(null);
 
   const modules = [
-    { id: 'marketing', name: 'Marketing AI', desc: 'Geração de Pautas e Campanhas', icon: <Megaphone size={32} /> },
+    { id: 'marketing', name: 'Marketing AI', desc: 'CRM, Concorrentes e Postagens', icon: <Megaphone size={32} /> },
     { id: 'pesquisas', name: 'Pesquisas (NPS)', desc: 'Envio de WhatsApp e CRM', icon: <MessageSquare size={32} /> },
-    { id: 'concorrentes', name: 'Concorrentes', desc: 'Análise de mercado e Instagram', icon: <BarChart2 size={32} /> },
-    { id: 'publicador', name: 'Publicador IG', desc: 'Postagem automática no Instagram', icon: <Camera size={32} /> },
+    { id: 'financeiro', name: 'Financeiro', desc: 'DRE, Caixa e Custos', icon: <DollarSign size={32} /> },
+    { id: 'indicadores', name: 'Indicadores', desc: 'Vendas e Metas', icon: <BarChart2 size={32} /> },
     { id: 'config', name: 'Configurações', desc: 'Ajustes do Sistema IFA', icon: <Settings size={32} /> },
   ];
 
@@ -300,6 +303,12 @@ export default function App() {
               <MarketingModule />
             ) : activeModule.id === 'pesquisas' ? (
               <PesquisasModule />
+            ) : activeModule.id === 'financeiro' ? (
+              <FinanceiroModule />
+            ) : activeModule.id === 'indicadores' ? (
+              <IndicadoresModule />
+            ) : activeModule.id === 'config' ? (
+              <ConfigModule />
             ) : (
               <div style={{ backgroundColor: 'var(--color-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
                 <h3 style={{ color: 'var(--color-secondary)', marginBottom: '16px' }}>Visão Geral</h3>

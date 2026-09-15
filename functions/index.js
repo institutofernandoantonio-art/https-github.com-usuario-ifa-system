@@ -25,3 +25,7 @@ exports.publicarInstagram = instagram.publicar;
 
 const crm = require("./crm");
 exports.gerarMensagem = crm.gerarMensagem;
+
+const drive = require("./drive");
+exports.listarImagens = drive.listarImagens;
+exports.casarImagens = drive.casarImagens;
