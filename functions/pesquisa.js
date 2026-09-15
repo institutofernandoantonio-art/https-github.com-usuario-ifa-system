@@ -1,17 +1,17 @@
 const { onRequest } = require("firebase-functions/v2/https");
 const crypto = require("crypto");
+const admin = require("firebase-admin");
+
+// Garante que o Admin SDK esteja inicializado (já está no index, mas por segurança)
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
 
 // Funções utilitárias
 function env(nome) {
   return String(process.env[nome] || "").trim();
 }
-
-function cab(extra = {}) {
-  const k = env("SUPABASE_SERVICE_KEY");
-  return { apikey: k, Authorization: `Bearer ${k}`, ...extra };
-}
-
-const BASE = () => env("SUPABASE_URL").replace(/\/+$/, "");
 
 function novoToken() {
   return crypto.randomBytes(16).toString("base64url");
@@ -21,7 +21,6 @@ function urlDaPesquisa(req, token) {
   const fixa = env("PESQUISA_URL_BASE");
   if (fixa) return `${fixa.replace(/\/+$/, "")}/pesquisa.html?t=${token}`;
   
-  // Como estamos no Firebase, pegamos do cabeçalho
   const host = req.headers["x-forwarded-host"] || req.headers.host;
   const proto = req.headers["x-forwarded-proto"] || "https";
   return `${proto}://${host}/pesquisa.html?t=${token}`;
@@ -49,7 +48,7 @@ function montarMensagem(cliente, link) {
 // Provedores de WhatsApp
 async function enviarZapi(numero, texto) {
   const inst = env("ZAPI_INSTANCE"), tok = env("ZAPI_TOKEN");
-  if (!inst || !tok) throw new Error("Z-API não configurada (ZAPI_INSTANCE / ZAPI_TOKEN).");
+  if (!inst || !tok) throw new Error("Z-API não configurada nas variáveis de ambiente.");
   
   const headers = { "Content-Type": "application/json" };
   const ct = env("ZAPI_CLIENT_TOKEN");
@@ -67,7 +66,7 @@ async function enviarZapi(numero, texto) {
 async function enviarEvolution(numero, texto) {
   const base = env("EVO_BASE_URL").replace(/\/+$/, "");
   const inst = env("EVO_INSTANCE"), key = env("EVO_APIKEY");
-  if (!base || !inst || !key) throw new Error("Evolution não configurada (EVO_BASE_URL / EVO_INSTANCE / EVO_APIKEY).");
+  if (!base || !inst || !key) throw new Error("Evolution não configurada.");
 
   const r = await fetch(`${base}/message/sendText/${inst}`, {
     method: "POST",
@@ -86,10 +85,9 @@ async function enviarWhatsapp(numero, texto) {
 }
 
 // ------------------------------------------------------------------
-// 2. ENVIAR PESQUISA (NPS via WhatsApp)
+// 2. ENVIAR PESQUISA (NPS via WhatsApp - Refatorado para Firestore)
 // ------------------------------------------------------------------
 exports.enviar = onRequest(async (req, res) => {
-  // CORS
   res.set('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') {
     res.set('Access-Control-Allow-Methods', 'POST');
@@ -109,15 +107,10 @@ exports.enviar = onRequest(async (req, res) => {
     if (!cliente) return res.status(400).json({ ok: false, erro: "Cliente não informado." });
     if (numero.length < 12) return res.status(400).json({ ok: false, erro: "Número inválido." });
 
-    if (!env("SUPABASE_URL") || !env("SUPABASE_SERVICE_KEY")) {
-      return res.status(500).json({ ok: false, erro: "Faltam credenciais do Supabase no backend." });
-    }
-
-    // Verifica Opt-out
-    const opt = await fetch(`${BASE()}/rest/v1/pesquisa_optout?select=whatsapp_e164&whatsapp_e164=eq.${numero}`, { headers: cab() });
-    if (opt.ok) {
-      const data = await opt.json();
-      if (data.length) return res.status(200).json({ ok: false, pulado: true, erro: "Cliente pediu para não receber." });
+    // Verifica Opt-out no Firestore
+    const optSnap = await db.collection('pesquisa_optout').doc(numero).get();
+    if (optSnap.exists) {
+      return res.status(200).json({ ok: false, pulado: true, erro: "Cliente pediu para não receber." });
     }
 
     const token = novoToken();
@@ -129,28 +122,29 @@ exports.enviar = onRequest(async (req, res) => {
       return res.status(200).json({ ok: true, teste: true, link, resposta: r });
     }
 
-    const ins = await fetch(`${BASE()}/rest/v1/pesquisas`, {
-      method: "POST",
-      headers: cab({ "Content-Type": "application/json", Prefer: "return=minimal" }),
-      body: JSON.stringify([{ token, cliente, whatsapp_e164: numero, status: "fila", criado_por: quem }]),
+    // Registra convite no Firestore ANTES de enviar
+    await db.collection('pesquisas').doc(token).set({
+      cliente,
+      whatsapp_e164: numero,
+      status: "fila",
+      criado_por: quem,
+      criado_em: admin.firestore.FieldValue.serverTimestamp()
     });
-    if (!ins.ok) throw new Error(`Falha ao registrar convite no Supabase (HTTP ${ins.status}).`);
 
     try {
       await enviarWhatsapp(numero, texto);
     } catch (e) {
-      await fetch(`${BASE()}/rest/v1/pesquisas?token=eq.${token}`, {
-        method: "PATCH",
-        headers: cab({ "Content-Type": "application/json", Prefer: "return=minimal" }),
-        body: JSON.stringify({ status: "erro", erro: String(e.message || e).slice(0, 400) }),
+      await db.collection('pesquisas').doc(token).update({
+        status: "erro",
+        erro: String(e.message || e).slice(0, 400)
       });
       return res.status(200).json({ ok: false, cliente, erro: String(e.message || e) });
     }
 
-    await fetch(`${BASE()}/rest/v1/pesquisas?token=eq.${token}`, {
-      method: "PATCH",
-      headers: cab({ "Content-Type": "application/json", Prefer: "return=minimal" }),
-      body: JSON.stringify({ status: "enviado", enviado_em: new Date().toISOString() }),
+    // Sucesso no envio
+    await db.collection('pesquisas').doc(token).update({
+      status: "enviado",
+      enviado_em: admin.firestore.FieldValue.serverTimestamp()
     });
 
     return res.status(200).json({ ok: true, cliente, token, link });
@@ -160,10 +154,9 @@ exports.enviar = onRequest(async (req, res) => {
 });
 
 // ------------------------------------------------------------------
-// 3. RESPONDER PESQUISA (Endpoint público acessado pelo form)
+// 3. RESPONDER PESQUISA (Endpoint público - Refatorado para Firestore)
 // ------------------------------------------------------------------
 exports.responder = onRequest(async (req, res) => {
-  // CORS
   res.set('Access-Control-Allow-Origin', '*');
   if (req.method === 'OPTIONS') {
     res.set('Access-Control-Allow-Methods', 'GET, POST');
@@ -175,21 +168,15 @@ exports.responder = onRequest(async (req, res) => {
     return typeof t === "string" && /^[A-Za-z0-9_-]{10,64}$/.test(t);
   }
 
-  async function buscar(token) {
-    const r = await fetch(`${BASE()}/rest/v1/pesquisas?select=token,cliente,nota,respondido_em,status&token=eq.${encodeURIComponent(token)}`, { headers: cab() });
-    if (!r.ok) return null;
-    const linhas = await r.json();
-    return linhas[0] || null;
-  }
-
   try {
     if (req.method === "GET") {
       const t = String(req.query?.t || "");
       if (!tokenValido(t)) return res.status(400).json({ ok: false, erro: "Link inválido." });
 
-      const p = await buscar(t);
-      if (!p) return res.status(404).json({ ok: false, erro: "Link inválido ou expirado." });
+      const doc = await db.collection('pesquisas').doc(t).get();
+      if (!doc.exists) return res.status(404).json({ ok: false, erro: "Link inválido ou expirado." });
 
+      const p = doc.data();
       return res.status(200).json({ ok: true, cliente: p.cliente, respondido: !!p.respondido_em, nota: p.nota });
     }
 
@@ -202,16 +189,20 @@ exports.responder = onRequest(async (req, res) => {
       if (!tokenValido(t)) return res.status(400).json({ ok: false, erro: "Link inválido." });
       if (!Number.isInteger(nota) || nota < 0 || nota > 10) return res.status(400).json({ ok: false, erro: "Nota inválida." });
 
-      const p = await buscar(t);
-      if (!p) return res.status(404).json({ ok: false, erro: "Link inválido ou expirado." });
+      const doc = await db.collection('pesquisas').doc(t).get();
+      if (!doc.exists) return res.status(404).json({ ok: false, erro: "Link inválido ou expirado." });
+      
+      const p = doc.data();
       if (p.respondido_em) return res.status(200).json({ ok: true, jaRespondido: true });
 
-      const r = await fetch(`${BASE()}/rest/v1/pesquisas?token=eq.${encodeURIComponent(t)}`, {
-        method: "PATCH",
-        headers: cab({ "Content-Type": "application/json", Prefer: "return=minimal" }),
-        body: JSON.stringify({ nota, comentario, status: "respondido", respondido_em: new Date().toISOString() }),
+      // Grava a resposta
+      await db.collection('pesquisas').doc(t).update({
+        nota,
+        comentario,
+        status: "respondido",
+        respondido_em: admin.firestore.FieldValue.serverTimestamp()
       });
-      if (!r.ok) throw new Error("Erro ao gravar resposta.");
+
       return res.status(200).json({ ok: true });
     }
 
