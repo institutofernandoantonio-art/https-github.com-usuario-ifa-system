@@ -7,3 +7,7 @@ admin.initializeApp();
 exports.ping = onRequest((req, res) => {
   res.json({ ok: true, message: "Firebase Functions do IFA funcionando!" });
 });
+
+// Módulos
+const marketing = require("./marketing");
+exports.gerarPautas = marketing.gerarPautas;
