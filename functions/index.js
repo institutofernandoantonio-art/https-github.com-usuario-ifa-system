@@ -15,3 +15,13 @@ exports.gerarPautas = marketing.gerarPautas;
 const pesquisa = require("./pesquisa");
 exports.enviarPesquisa = pesquisa.enviar;
 exports.responderPesquisa = pesquisa.responder;
+
+const concorrentes = require("./concorrentes");
+exports.coletarConcorrentes = concorrentes.coletar;
+exports.analisarConcorrentes = concorrentes.analisar;
+
+const instagram = require("./instagram");
+exports.publicarInstagram = instagram.publicar;
+
+const crm = require("./crm");
+exports.gerarMensagem = crm.gerarMensagem;
