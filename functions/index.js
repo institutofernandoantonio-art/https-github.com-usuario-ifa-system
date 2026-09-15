@@ -11,3 +11,7 @@ exports.ping = onRequest((req, res) => {
 // Módulos
 const marketing = require("./marketing");
 exports.gerarPautas = marketing.gerarPautas;
+
+const pesquisa = require("./pesquisa");
+exports.enviarPesquisa = pesquisa.enviar;
+exports.responderPesquisa = pesquisa.responder;
