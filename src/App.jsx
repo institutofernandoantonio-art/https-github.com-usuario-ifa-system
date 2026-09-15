@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Users, MessageSquare, Instagram, BarChart2, Settings } from 'lucide-react';
+import { Home, Users, MessageSquare, Megaphone, BarChart2, Settings } from 'lucide-react';
 
 const styles = {
   layout: { display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-background)' },
@@ -22,7 +22,7 @@ function App() {
     { icon: <Home size={20} />, label: 'Dashboard' },
     { icon: <Users size={20} />, label: 'Empresários' },
     { icon: <MessageSquare size={20} />, label: 'Pesquisas (NPS)' },
-    { icon: <Instagram size={20} />, label: 'Marketing AI' },
+    { icon: <Megaphone size={20} />, label: 'Marketing AI' },
     { icon: <BarChart2 size={20} />, label: 'Análise de Concorrentes' },
     { icon: <Settings size={20} />, label: 'Configurações' },
   ];
