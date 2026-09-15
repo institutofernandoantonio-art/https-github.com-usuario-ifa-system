@@ -4,6 +4,7 @@ import {
   Megaphone, BarChart2, Camera, Settings, ArrowLeft
 } from 'lucide-react';
 import MarketingModule from './modules/MarketingModule';
+import PesquisasModule from './modules/PesquisasModule';
 
 const styles = {
   // Layout Base
@@ -297,6 +298,8 @@ export default function App() {
             
             {activeModule.id === 'marketing' ? (
               <MarketingModule />
+            ) : activeModule.id === 'pesquisas' ? (
+              <PesquisasModule />
             ) : (
               <div style={{ backgroundColor: 'var(--color-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--color-border)' }}>
                 <h3 style={{ color: 'var(--color-secondary)', marginBottom: '16px' }}>Visão Geral</h3>
